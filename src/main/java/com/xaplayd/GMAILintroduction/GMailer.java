@@ -58,46 +58,77 @@ public class GMailer {
 		return new AuthorizationCodeInstalledApp(flow, receiver).authorize("user");
 	}
 
-	private void sendMail(String subject, String message) throws Exception {
+	private void sendMail(String subject, String messageText) throws Exception {
 
-		Properties props = new Properties();
-		Session session = Session.getDefaultInstance(props, null);
-		MimeMessage email = new MimeMessage(session);
-		email.setFrom(new InternetAddress(TEST_EMAIL));
-		email.addRecipient(jakarta.mail.Message.RecipientType.TO, new InternetAddress(TEST_EMAIL));
-		email.setSubject(subject);
-		email.setText(message);
+	    Properties props = new Properties();
+	    Session session = Session.getDefaultInstance(props, null);
+	    MimeMessage email = new MimeMessage(session);
+	    email.setFrom(new InternetAddress(TEST_EMAIL));
+	    email.addRecipient(jakarta.mail.Message.RecipientType.TO, new InternetAddress(TEST_EMAIL));
+	    email.setSubject(subject, "UTF-8");
 
-		ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-		email.writeTo(buffer);
-		byte[] rawMessageBytes = buffer.toByteArray();
-		String encodedEmail = Base64.encodeBase64URLSafeString(rawMessageBytes);
-		Message msg = new Message();
-		msg.setRaw(encodedEmail);
+	    // Texto simples (fallback)
+	    String plainText = "Olá!\n\nEste é um e-mail de teste.\n\nAcesse: https://www.google.com\n\nAtenciosamente,\nGMailer Bot";
 
-		try {
+	    // HTML formatado
+	    String htmlContent = """
+	        <html>
+	          <body style="font-family: Arial, sans-serif; color: #333;">
+	            <h2 style="color: #2e6c80;">Olá!</h2>
+	            <p>Este é um <b>e-mail de teste</b> enviado com <span style="color: green;">formatação HTML</span>.</p>
+	            <p>Você pode incluir:</p>
+	            <ul>
+	              <li>Listas</li>
+	              <li><b>Negrito</b>, <i>itálico</i></li>
+	              <li>Links: <a href="https://www.google.com">Google</a></li>
+	            </ul>
+	            <p>Atenciosamente,<br><i>GMailer Bot</i></p>
+	          </body>
+	        </html>
+	    """;
 
-			msg = service.users().messages().send("me", msg).execute();
-			System.out.println("Message ID: " + msg.getId());
-			System.out.println(msg.toPrettyString());
-		} catch (GoogleJsonResponseException e) {
-			GoogleJsonError error = e.getDetails();
-			if (error.getCode() == 403) {
-				System.err.println("Unable to send message " + e.getDetails());
-			} else {
-				throw e;
-			}
-		}
+	    // Cria a parte alternativa (text + html)
+	    jakarta.mail.Multipart multipart = new jakarta.mail.internet.MimeMultipart("alternative");
+
+	    // Parte texto simples
+	    jakarta.mail.internet.MimeBodyPart textPart = new jakarta.mail.internet.MimeBodyPart();
+	    textPart.setText(plainText, "utf-8");
+
+	    // Parte HTML
+	    jakarta.mail.BodyPart htmlPart = new jakarta.mail.internet.MimeBodyPart();
+	    htmlPart.setContent(htmlContent, "text/html; charset=utf-8");
+
+	    // Adiciona as partes ao multipart
+	    multipart.addBodyPart(textPart);
+	    multipart.addBodyPart(htmlPart);
+
+	    // Define o conteúdo do e-mail
+	    email.setContent(multipart);
+
+	    // Codifica e envia
+	    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+	    email.writeTo(buffer);
+	    byte[] rawMessageBytes = buffer.toByteArray();
+	    String encodedEmail = Base64.encodeBase64URLSafeString(rawMessageBytes);
+	    Message msg = new Message();
+	    msg.setRaw(encodedEmail);
+
+	    try {
+	        msg = service.users().messages().send("me", msg).execute();
+	        System.out.println("Message ID: " + msg.getId());
+	        System.out.println(msg.toPrettyString());
+	    } catch (GoogleJsonResponseException e) {
+	        GoogleJsonError error = e.getDetails();
+	        if (error.getCode() == 403) {
+	            System.err.println("Unable to send message " + e.getDetails());
+	        } else {
+	            throw e;
+	        }
+	    }
 	}
 
 	public static void main(String[] args) throws Exception {
-		new GMailer().sendMail("A new message", """
-
-				Hello buddy
-
-				It's a test, bye.
-
-				""");
+		new GMailer().sendMail("E-mail com HTML + Texto", "");
 
 	}
 
